@@ -2,6 +2,9 @@ import { ethers } from "hardhat";
 import {  BigNumber } from "ethers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
+// import { singletons } from "@openzeppelin/test-helpers";
+
+
 export type Bid = { price: number, timestamp: number }
 export const day = 24 * 60 * 60;
 
@@ -112,5 +115,24 @@ export const deployTokenSaleContract_ERC1363 = async () => {
     return { tokenSale, token1363, owner, user0, user1, another };
 }
 
+
+/**
+ * @returns an object containing an instance of the TokenSale contract that accepts ERC1363 tokens
+ */
+export const deployTokenSaleContract_ERC777 = async () => {
+
+    const [ owner, user0, user1, another ] = await ethers.getSigners();
+
+    const Token777 = await ethers.getContractFactory("Token777")
+    const token777 = await Token777.deploy(toWei(1_000_000))
+
+    const TokenSale = await ethers.getContractFactory("TokenSale")
+    const tokenSale = await TokenSale.deploy(token777.address)
+
+    await token777.connect(owner).transfer(user0.address, toWei(100))
+    await token777.connect(owner).transfer(user1.address, toWei(100))
+
+    return { tokenSale, token777, owner, user0, user1, another };
+}
 
 

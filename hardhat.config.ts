@@ -1,6 +1,7 @@
 import "@nomicfoundation/hardhat-toolbox";
 import "@nomiclabs/hardhat-etherscan";
 import "hardhat-docgen";
+import "hardhat-erc1820"
 
 import { HardhatUserConfig } from "hardhat/config";
 
