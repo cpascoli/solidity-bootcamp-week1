@@ -8,11 +8,8 @@ import { SafeERC20 } from  "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { IERC1820Registry } from  "@openzeppelin/contracts/utils/introspection/IERC1820Registry.sol";
-
 import { IERC1363Receiver } from "./tokens/ERC1363/IERC1363Receiver.sol";
 
-
-import "hardhat/console.sol";
 
 /**
  *  @title Token sale and buyback with bonding curve.
