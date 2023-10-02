@@ -42,6 +42,8 @@ contract TokenSale is ERC20, Ownable, IERC777Recipient, IERC1363Receiver {
     }
 
 
+    /// @notice Allows to buy 'amount' tokens from the contract
+    /// @param amount THe amount of tokens to buy
     function buy(uint256 amount) external {
         // checks
         require(amount > 0, "Invalud amount");
@@ -56,6 +58,8 @@ contract TokenSale is ERC20, Ownable, IERC777Recipient, IERC1363Receiver {
     }
 
 
+    /// @notice Allows to sell 'amount' tokens to the contract
+    /// @param amount THe amount of tokens to sell
     function sell(uint256 amount) external {
         // checks
         require(amount > 0, "Invalud amount");
@@ -74,6 +78,8 @@ contract TokenSale is ERC20, Ownable, IERC777Recipient, IERC1363Receiver {
 
 
     /// @notice Handle the receiving of ERC777 tokens
+    /// @param from the address of the sender that will receive the newly minted tokens
+    /// @param amount THe amount of tokens received by the contract that will be used to pay for the new minted tokens
     function tokensReceived(
         address operator,
         address from,
@@ -120,8 +126,8 @@ contract TokenSale is ERC20, Ownable, IERC777Recipient, IERC1363Receiver {
     }
 
 
-    /// @notice return the average price and the amount of tokens to spend in order to mint 'tokensToMint' tokens.
-    /// @param tokensToMint The amount of tokens to mint
+    /// @notice return the average buy price and the amount of tokens to spend in when buying 'tokensToMint' tokens.
+    /// @param tokensToMint The amount of tokens to buy
     function quoteBuyPriceAmount(uint256 tokensToMint) public view returns(uint256 avgPrice, uint256 quotedAmount) {
         uint256 initialPrice = price();
 
@@ -129,27 +135,26 @@ contract TokenSale is ERC20, Ownable, IERC777Recipient, IERC1363Receiver {
         // includes the pricePrecision factor
         uint256 finalPrice = initialPrice + pricePrecision * K * tokensToMint / (10 ** decimals());
 
-        // includes the pricePrecision factor
+         // A =  (p1 + p2) * ds / 2 = avgPrice * deltaSupply
         avgPrice = (initialPrice + finalPrice) / 2;
-
-        // A =  (p1 + p2) * ds / 2
         quotedAmount = (10 ** payToken.decimals()) * avgPrice * tokensToMint / pricePrecision / (10 ** decimals());
     }
 
 
+    /// @notice return the average sell price and the amount of tokens received when selling 'tokensToBurn' tokens.
+    /// @param tokensToBurn The amount of tokens to sell
     function quoteSellPriceAmount(uint256 tokensToBurn) external view returns(uint256 avgPrice, uint256 quotedAmount) {
 
         uint256 initialPrice = price();
         uint256 finalPrice = K * (totalSupply() - tokensToBurn) * pricePrecision / (10 ** decimals());
 
+        // A =  (p1 + p2) * ds / 2 = avgPrice * deltaSupply
         avgPrice = (initialPrice + finalPrice) / 2;
-
-        // A =  (p1 + p2) * ds / 2
         quotedAmount = (10 ** payToken.decimals()) * avgPrice * tokensToBurn / pricePrecision / (10 ** decimals());
     }
 
     
-    /// Linear bonding curve
+    /// @notice A linear bonding curve where prices increase proportionally to the supply
     function price() public view returns (uint256) {
         return K * totalSupply() * pricePrecision / (10 ** decimals());
     }
@@ -159,41 +164,18 @@ contract TokenSale is ERC20, Ownable, IERC777Recipient, IERC1363Receiver {
     /// @dev  We need to solve the equation:
     ///       K * tokensToMint^2 + 2 * price * tokensToMint - 2 * payAmount = 0
     function amountToMintForTokens(uint256 payAmount) public view returns (uint256 toMint) {
-        // This would solve a quadratic equation in case of a linear curve
-        // Result derived from area of trapezoid formula
         uint initialPrice = price();
-
         uint256 priceWith18Decs = initialPrice * (10 ** 12);
-
-        // console.log(">>> amountToMintForTokens - initialPrice: ", initialPrice, priceWith18Decs);
-        // console.log(">>> amountToMintForTokens - payAmount: ", payAmount);
-        //toMint =  (2 * payAmount) / (initialPrice + Math.sqrt((initialPrice ** 2) + (2 * K * payAmount)));
-
-        // p2 := h := sqrt( 2Ak + p1^2 )  1000000000000000000
+        // p1 is the current price
+        // p2 is the final price when additional 'toMint' tokens are minted
+        // A is the amount of tokens paid to buy 'toMint' tokens: 'payAmount'
+        // h is the additional supply that will be minted: 'toMint'
+        //
+        // p2 := h := sqrt( 2Ak + p1^2 ) 
         uint256 finalPrice = Math.sqrt((2 * payAmount * K * 1e18) + (priceWith18Decs * priceWith18Decs));
         uint256 priceDiff = finalPrice - priceWith18Decs;
 
-        // console.log(">>> amountToMintForTokens - finalPrice: ", finalPrice);
-        // console.log(">>> amountToMintForTokens - priceDiff: ", priceDiff);
-
         toMint = priceDiff / K;
-        
-        // console.log(">>> amountToMintForTokens - toMint!!: ", toMint); // 2000000000 000000000  2000000000
     }
-
-
-    function tokensForPaidAmount(uint256 paidAmount ) internal view returns(uint256) {
-           return pricePrecision * paidAmount / price();
-    }
-
-    function payTokensForAmount(uint256 buyAmount ) internal view returns(uint256) {
-           return buyAmount * price() / pricePrecision;
-    }
-
-
-    function calculateTrapezoidArea(uint256 base1, uint256 base2, uint256 height) internal pure returns (uint256) {
-        return (base1 + base2) * height / 2;
-    }
-
 
 }
