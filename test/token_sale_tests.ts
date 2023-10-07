@@ -35,7 +35,8 @@ describe("TokenSale", function () {
                 const buyAmount = 3
                 const [ price, payAmount ] = await tokenSale.quoteBuyPriceAmount( toWei(buyAmount) )
                 await token20.connect(user0).approve(tokenSale.address, payAmount)
-                await tokenSale.connect(user0).buy( toWei(buyAmount) )
+                const slippage = price.mul(2).div(100);
+                await tokenSale.connect(user0).buy( toWei(buyAmount), price, slippage)
     
                 const precision = await tokenSale.pricePrecision()
                 const expectedPrice = 3
@@ -52,7 +53,8 @@ describe("TokenSale", function () {
                 const balanceBefore = await token20.balanceOf(user0.address)
     
                 await token20.connect(user0).approve(tokenSale.address, payAmount)
-                await tokenSale.connect(user0).buy( toWei(buyAmount) )
+                const slippage = price.mul(2).div(100);
+                await tokenSale.connect(user0).buy( toWei(buyAmount), price, slippage )
     
                 const balanceAfter = await token20.balanceOf(user0.address)
     
@@ -75,7 +77,8 @@ describe("TokenSale", function () {
     
                 // user0 buys 2 tokens
                 await token20.connect(user0).approve(tokenSale.address, payAmount0)
-                await tokenSale.connect(user0).buy( toWei(buyAmount0) )
+                const slippage = price0.mul(2).div(100);
+                await tokenSale.connect(user0).buy( toWei(buyAmount0), price0, slippage )
     
                 const pricePaid0 = toUnits(payAmount0) / toUnits(await tokenSale.balanceOf(user0.address))
                 expect(pricePaid0).to.be.equal(price0.toNumber() / precision)
@@ -88,7 +91,8 @@ describe("TokenSale", function () {
     
                 // user1 buys 2 tokens
                 await token20.connect(user1).approve(tokenSale.address, payAmount1)
-                await tokenSale.connect(user1).buy( toWei(buyAmount1) )
+                const slippage1 = price1.mul(2).div(100);
+                await tokenSale.connect(user1).buy( toWei(buyAmount1), price1 , slippage1)
     
                 const pricePaid1 = toUnits(payAmount1) / toUnits(await tokenSale.balanceOf(user1.address))
                
@@ -110,16 +114,20 @@ describe("TokenSale", function () {
                 const [ price0, payAmount0 ] = await tokenSale.quoteBuyPriceAmount( toWei(buyAmount) )
     
                 await token20.connect(user0).approve(tokenSale.address, payAmount0)
-                await tokenSale.connect(user0).buy( toWei(buyAmount) )
+                const slippage = price0.mul(2).div(100);
+                await tokenSale.connect(user0).buy( toWei(buyAmount), price0, slippage )
     
                 // second buy
                 const priceBeforeSecondBuy = (await tokenSale.price()).toNumber() / precision
                 const [ price1, payAmount1 ] = await tokenSale.quoteBuyPriceAmount( toWei(buyAmount) )
     
                 await token20.connect(user0).approve(tokenSale.address, payAmount1)
-                await tokenSale.connect(user0).buy( toWei(buyAmount) )
+                const slippage1 = price1.mul(2).div(100);
+                await tokenSale.connect(user0).buy( toWei(buyAmount), price1, slippage1 )
     
-                await tokenSale.connect(user0).sell( toWei(buyAmount) )
+                const [ sellPrice, _ ] = await tokenSale.quoteSellPriceAmount( toWei(buyAmount) )
+                const sellSlippage = sellPrice.mul(2).div(100);
+                await tokenSale.connect(user0).sell( toWei(buyAmount), sellPrice, sellSlippage)
 
                 // verify that the price moved back to where it was before the second buy
                 const priceAfterSell = (await tokenSale.price()).toNumber() / precision
@@ -227,7 +235,10 @@ describe("TokenSale", function () {
                 expect (toUnits(boughtAmount) ).to.be.equal(buyAmount)
 
                 // sell tokens bought in the second buy
-                await tokenSale.connect(user0).sell( boughtAmount )
+                const [ sellPrice, _ ] = await tokenSale.quoteSellPriceAmount( boughtAmount )
+                const sellSlippage = sellPrice.mul(2).div(100);
+
+                await tokenSale.connect(user0).sell( boughtAmount, sellPrice,  sellSlippage)
                
                 // verify that the price moved back to where it was before the second buy
                 const priceAfterSell = (await tokenSale.price()).toNumber() / precision
@@ -339,7 +350,10 @@ describe("TokenSale", function () {
                 expect (toUnits(boughtAmount) ).to.be.equal(buyAmount)
 
                 // sell tokens bought in the second buy
-                await tokenSale.connect(user0).sell( boughtAmount )
+                const [ sellPrice, _ ] = await tokenSale.quoteSellPriceAmount( boughtAmount )
+                const sellSlippage = sellPrice.mul(2).div(100);
+
+                await tokenSale.connect(user0).sell( boughtAmount, sellPrice,  sellSlippage )
 
                 // verify that the price moved back to where it was before the second buy
                 const priceAfterSell = (await tokenSale.price()).toNumber() / precision

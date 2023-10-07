@@ -48,41 +48,46 @@ contract TokenSale is ERC20, Ownable, IERC777Recipient, IERC1363Receiver {
 
     /// @notice Allows to buy 'amount' tokens from the contract
     /// @param amount THe amount of tokens to buy
-    function buy(uint256 amount) external {
+    /// @param priceRequested the price requested by the buyer
+    /// @param maxSlippage the max increase in price, with respect to preiceRequested, allowed by this buy order.
+    function buy(uint256 amount, uint256 priceRequested, uint256 maxSlippage) external {
         // checks
         require(amount > 0, "Invalud amount");
-        (, uint256 spendAmount) = quoteBuyPriceAmount(amount);
-        require(payToken.allowance(msg.sender, address(this)) >= spendAmount, "Insufficient allowance");
+        (uint256 quotedPrice, uint256 quotedAmount) = quoteBuyPriceAmount(amount);
+
+        require(payToken.allowance(msg.sender, address(this)) >= quotedAmount, "Insufficient allowance");
+        require(quotedPrice <= priceRequested + maxSlippage, "Slippage exceeded");
 
         // effects
         _mint(msg.sender, amount);
 
         // interactions
-        payToken.safeTransferFrom(msg.sender, address(this), spendAmount);
+        payToken.safeTransferFrom(msg.sender, address(this), quotedAmount);
 
-        emit Bought(msg.sender, spendAmount, amount);
+        emit Bought(msg.sender, quotedAmount, amount);
     }
 
 
     /// @notice Allows to sell 'amount' tokens to the contract
-    /// @param amount THe amount of tokens to sell
-    function sell(uint256 amount) external {
+    /// @param toBurn THe amount of tokens to sell
+    /// @param priceRequested THe price requested by the seller
+    /// @param maxSlippage the max decrease in price, with respect to preiceRequested, allowed by this sell order.
+    function sell(uint256 toBurn, uint256 priceRequested, uint256 maxSlippage) external {
+        
         // checks
-        require(amount > 0, "Invalud amount");
+        require(toBurn > 0, "Invalud amount");
+        (uint256 quotedPrice, uint256 quotedAmount) = quoteSellPriceAmount(toBurn);
+
+        // verify slippage
+        require(quotedPrice >= priceRequested - maxSlippage, "Slippage exceeded");
 
         // effects
-        uint256 startingPrice = price();
-        _burn(msg.sender, amount);
-        uint256 finalPrice = price();
+        _burn(msg.sender, toBurn);
 
         // interactions
-        uint256 precisionFactor = (10 ** decimals()) / pricePrecision;
-        uint256 avgPrice = (startingPrice + finalPrice) / 2;
-        uint256 boughtAmount = amount * avgPrice / precisionFactor;
+        payToken.safeTransfer(msg.sender, quotedAmount);
 
-        payToken.safeTransfer(msg.sender, boughtAmount);
-
-        emit Sold(msg.sender, amount, boughtAmount);
+        emit Sold(msg.sender, toBurn, quotedAmount);
     }
 
 
@@ -156,7 +161,7 @@ contract TokenSale is ERC20, Ownable, IERC777Recipient, IERC1363Receiver {
 
     /// @notice return the average sell price and the amount of tokens received when selling 'tokensToBurn' tokens.
     /// @param tokensToBurn The amount of tokens to sell
-    function quoteSellPriceAmount(uint256 tokensToBurn) external view returns(uint256 avgPrice, uint256 quotedAmount) {
+    function quoteSellPriceAmount(uint256 tokensToBurn) public view returns(uint256 avgPrice, uint256 quotedAmount) {
 
         uint256 initialPrice = price();
         uint256 finalPrice = K * (totalSupply() - tokensToBurn) * pricePrecision / (10 ** decimals());
