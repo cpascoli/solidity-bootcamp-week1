@@ -17,7 +17,7 @@ contract UntrustedEscrow is ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
 
     /// @notice maps the address of a seller against the deposit made by a buyer
-    mapping(address => DepositInfo) deposits;
+    mapping(address => DepositInfo) public deposits;
 
     /// @notice the duration of the timelock for the tokens in escrow
     uint256 public constant UNLOCK_DELAY = 3 days;
@@ -47,7 +47,7 @@ contract UntrustedEscrow is ReentrancyGuard, Ownable {
         uint256 amount
     );
 
-    event Voided(
+    event Expired(
         address indexed buyer,
         address indexed seller,
         address token,
@@ -79,11 +79,21 @@ contract UntrustedEscrow is ReentrancyGuard, Ownable {
         });
 
         // transfer tokens to the contract
+        uint256 balanceBeforeTransfer = IERC20(tokenAddress).balanceOf(address(this));
         IERC20(tokenAddress).safeTransferFrom(
             msg.sender,
             address(this),
             amount
         );
+
+        // check the amount effectively received (e.g. account for tokens that take fees)
+        uint256 balanceAfterTransfer = IERC20(tokenAddress).balanceOf(address(this));
+        uint transferredAmount = balanceAfterTransfer - balanceBeforeTransfer;
+        require(transferredAmount > 0, "Invalid amount transferred");
+        if (transferredAmount != amount) {
+             DepositInfo storage info = deposits[sellerAddress];
+             info.amount == transferredAmount;
+        }
 
         emit Deposited(msg.sender, sellerAddress, tokenAddress, amount);
     }
@@ -98,7 +108,7 @@ contract UntrustedEscrow is ReentrancyGuard, Ownable {
             "Tokens locked"
         );
 
-        // delete deposit
+        // delete deposit info
         delete deposits[msg.sender];
 
         // transfer tokens to the seller
@@ -126,13 +136,12 @@ contract UntrustedEscrow is ReentrancyGuard, Ownable {
         // transfer tokens back to the buyer
         IERC20(depositInfo.token).safeTransfer(msg.sender, depositInfo.amount);
 
-        emit Voided (
+        emit Expired (
             depositInfo.buyer,
             msg.sender,
             depositInfo.token,
             depositInfo.amount
         );
-
     }
 
 

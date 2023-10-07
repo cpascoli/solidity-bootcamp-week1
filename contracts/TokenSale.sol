@@ -11,6 +11,7 @@ import { IERC1820Registry } from  "@openzeppelin/contracts/utils/introspection/I
 import { IERC1363Receiver } from "./tokens/ERC1363/IERC1363Receiver.sol";
 
 
+
 /**
  *  @title Token sale and buyback with bonding curve.
  *  @author Carlo Pascoli
@@ -35,6 +36,9 @@ contract TokenSale is ERC20, Ownable, IERC777Recipient, IERC1363Receiver {
     /// @notice the token used to pay for the tokens sold by the contract
     IERC20Metadata immutable public payToken;
 
+    event Bought(address indexed recipient, uint256 amouuntPaid, uint256 amountReceived);
+    event Sold(address indexed recipient, uint256 amouuntPaid, uint256 amountReceived);
+
 
     constructor(address payTokenAddress) ERC20("Moon Token", "MT") {
         _ERC1820_REGISTRY.setInterfaceImplementer(address(this), keccak256("ERC777TokensRecipient"), address(this));
@@ -55,6 +59,8 @@ contract TokenSale is ERC20, Ownable, IERC777Recipient, IERC1363Receiver {
 
         // interactions
         payToken.safeTransferFrom(msg.sender, address(this), spendAmount);
+
+        emit Bought(msg.sender, spendAmount, amount);
     }
 
 
@@ -63,17 +69,20 @@ contract TokenSale is ERC20, Ownable, IERC777Recipient, IERC1363Receiver {
     function sell(uint256 amount) external {
         // checks
         require(amount > 0, "Invalud amount");
-        require(balanceOf(msg.sender) >= amount, "Insufficient balance");
 
         // effects
-        uint256 initialPrice = price() * 10**12;
+        uint256 startingPrice = price();
         _burn(msg.sender, amount);
-        uint256 finalPrice = price() * 10**12;
+        uint256 finalPrice = price();
 
         // interactions
-        uint256 boughtAmount = (initialPrice + finalPrice) * amount / 2 / 10 ** 18;
+        uint256 precisionFactor = (10 ** decimals()) / pricePrecision;
+        uint256 avgPrice = (startingPrice + finalPrice) / 2;
+        uint256 boughtAmount = amount * avgPrice / precisionFactor;
 
-        payToken.transfer(msg.sender, boughtAmount);
+        payToken.safeTransfer(msg.sender, boughtAmount);
+
+        emit Sold(msg.sender, amount, boughtAmount);
     }
 
 
@@ -93,10 +102,12 @@ contract TokenSale is ERC20, Ownable, IERC777Recipient, IERC1363Receiver {
         require(msg.sender == address(payToken), "Invalid caller");
         require(amount > 0, "Invalud amount");
 
-        uint256 toMint = amountToMintForTokens(amount);
+        uint256 toMint = amountToMint(amount);
 
         // interactions
         _mint(from, toMint);
+
+        emit Bought(msg.sender, amount, toMint);
     }
 
 
@@ -117,10 +128,12 @@ contract TokenSale is ERC20, Ownable, IERC777Recipient, IERC1363Receiver {
         require(msg.sender == address(payToken), "Invalid caller");
         require(amount > 0, "Invalud amount");
 
-        uint256 toMint = amountToMintForTokens(amount);
+        uint256 toMint = amountToMint(amount);
 
         // interactions
         _mint(sender, toMint);
+
+        emit Sold(msg.sender, amount, toMint);
 
         return bytes4(keccak256("onTransferReceived(address,address,uint256,bytes)"));
     }
@@ -160,20 +173,23 @@ contract TokenSale is ERC20, Ownable, IERC777Recipient, IERC1363Receiver {
     }
 
 
-    /// @notice returns the amount of tokens to mint in exchange for 'payAmount' tokens
-    /// @dev  We need to solve the equation:
-    ///       K * tokensToMint^2 + 2 * price * tokensToMint - 2 * payAmount = 0
-    function amountToMintForTokens(uint256 payAmount) public view returns (uint256 toMint) {
-        uint initialPrice = price();
-        uint256 priceWith18Decs = initialPrice * (10 ** 12);
-        // p1 is the current price
-        // p2 is the final price when additional 'toMint' tokens are minted
-        // A is the amount of tokens paid to buy 'toMint' tokens: 'payAmount'
-        // h is the additional supply that will be minted: 'toMint'
-        //
-        // p2 := h := sqrt( 2Ak + p1^2 ) 
-        uint256 finalPrice = Math.sqrt((2 * payAmount * K * 1e18) + (priceWith18Decs * priceWith18Decs));
-        uint256 priceDiff = finalPrice - priceWith18Decs;
+    /// @notice returns the additional supply of tokens 'toMint' in exchange for 'payAmount' tokens.
+    /// @dev 'payAmount' represents the area of the trapezoid below the bonding curve 
+    ///       between supply s1 (at price p1) and supply s2 (at price p2), where 'toMint' := s2 - s1
+    ///       We need to solve the quadratic equation:
+    ///         K * toMint^2 + 2 * p1 * toMint - 2 * payAmount = 0
+    ///       Which is proportional to the difference in price p2 - p1 determiend by the area of the trapezoid: 
+    ///         h := sqrt( 2Ak + p1^2 ) is the additional supply that will be minted ()'toMint')
+    ///         p1 is the current price
+    ///         p2 is the final price when additional 'toMint' tokens are minted
+    ///         A is the amount of tokens paid to buy 'toMint' tokens: 'payAmount'
+
+    function amountToMint(uint256 payAmount) public view returns (uint256 toMint) {
+        uint startingPrice = price();
+        uint256 priceWith18Decs = startingPrice * (10 ** decimals() / pricePrecision);
+
+        uint256 finalPriceWith18Decs = Math.sqrt((2 * payAmount * K * 1e18) + (priceWith18Decs * priceWith18Decs));
+        uint256 priceDiff = finalPriceWith18Decs - priceWith18Decs;
 
         toMint = priceDiff / K;
     }
