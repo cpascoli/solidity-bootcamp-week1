@@ -13,8 +13,10 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
  *         and a seller can withdraw it 3 days later.
  */
 contract UntrustedEscrow is ReentrancyGuard, Ownable {
+
     using SafeERC20 for IERC20;
 
+    /// @notice maps the address of a seller against the deposit made by a buyer
     mapping(address => DepositInfo) deposits;
 
     /// @notice the duration of the timelock for the tokens in escrow
@@ -53,7 +55,8 @@ contract UntrustedEscrow is ReentrancyGuard, Ownable {
     );
 
 
-    /// @notice Allows the buyer to lock some tokens into the contract
+    /// @notice Allows the buyer to lock some tokens into the contract.
+    ///         It reverts when a deposit already exists for a seller.
     /// @param tokenAddress The address of the token being tranferred
     /// @param sellerAddress The address of the seller that can withdraw the tokens
     /// @param amount The amount of tokens being transferred
@@ -64,7 +67,7 @@ contract UntrustedEscrow is ReentrancyGuard, Ownable {
         require(amount > 0, "Invalid amount");
         require(
             deposits[sellerAddress].depositTimestamp == 0,
-            "Deposit already exist for seller"
+            "Deposit already exists for seller"
         );
 
         // store deposit info
